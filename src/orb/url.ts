@@ -62,6 +62,24 @@ export class CorbaName extends CorbaLocation {
     }
 }
 
+export class CorbaHTTP extends Object {
+    host: string = ""
+    port: number = 0
+    protocol: string = ""
+    pathname: string = ""
+    objectKey: string = ""
+    override toString() {
+        let txt = this.protocol + "//";
+        txt += this.host;
+        if (this.port !== 0)
+            txt += ":" + this.port;
+        txt += this.pathname;
+        if (this.objectKey !== undefined)
+            txt += "#" + this.objectKey
+        return txt;
+    }
+}
+
 export class ObjectAddress {
     proto = "iiop"
     major = 1
@@ -90,6 +108,10 @@ export class UrlParser {
         if (this.url.match("corbaname:")) {
             return this.corbaname()
         }
+        if (this.url.match("http://") || this.url.match("https://") || 
+            this.url.match("ws://") || this.url.match("wss://")) {
+            return this.http()
+        }
         throw Error(`Bad string, expected on of 'IOR:...', 'corbaloc:...' or 'corbaname:...'`)
     }
 
@@ -114,6 +136,19 @@ export class UrlParser {
             this.loc.objectKey = keyString
         }
         return this.loc
+    }
+
+    http() {
+        const name = new CorbaHTTP();
+        const url = new URL(this.url.data);
+        name.host = url.hostname;
+        name.port = parseInt(url.port);
+        name.protocol = url.protocol;
+        name.pathname = url.pathname;
+        
+        name.objectKey = url.hash.replace("#","");
+
+        return name;
     }
 
     obj_addr_list() {

@@ -24,6 +24,6 @@ import { Connection } from "./connection"
 // orb.registerProtocol(new WebSocketProtocol(orb))
 export interface Protocol {
     // client/initiator: called by the ORB
-    connect(orb: ORB, hostname: string, port: number): Promise<Connection>
+    connect(orb: ORB, hostname: string, port: number, pathname?: string): Promise<Connection>
     close(): Promise<void>
 }

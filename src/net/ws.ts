@@ -66,12 +66,12 @@ export abstract class WsProtocolBase<S extends http.Server, O extends http.Serve
         this.serverOptions = options
     }
 
-    abstract getUrl(host: string, port: number): string
+    abstract getUrl(host: string, port: number, pathname?: string): string
     abstract createServer(): S
     abstract createConnection(orb: ORB, connection: WebSocketConnection): WsConnection
 
     // called by the ORB
-    async connect(orb: ORB, host: string, port: number) {
+    async connect(orb: ORB, host: string, port: number, pathname?: string) {
         return new Promise<Connection>((resolve, reject) => {
             const socket = new (ws as any).default.client() as WebSocketClient
             socket.once("connectFailed", (error: Error) => reject(error))
@@ -94,9 +94,9 @@ export abstract class WsProtocolBase<S extends http.Server, O extends http.Serve
                 orb.addConnection(connection)
                 resolve(connection)
             })
-            const url = this.getUrl(host, port)
+            const url = this.getUrl(host, port, pathname)
             // console.log(`WsProtocol.connect(orb, '${host}', ${port}) -> ${url}`)
-            socket.connect(url)
+            socket.connect(url, ["giop.omniorb.net"])
         })
     }
 
@@ -155,8 +155,13 @@ export class WsProtocol extends WsProtocolBase<http.Server, http.ServerOptions> 
     override createConnection(orb: ORB, connection: WebSocketConnection): WsConnection {
         return new WsConnection(orb, connection)
     }
-    override getUrl(host: string, port: number) {
-        return `ws://${host}:${port}/`
+    override getUrl(host: string, port: number, pathname?: string) {
+        if(pathname === undefined) {
+            return `ws://${host}:${port}/`
+        }
+        else {
+            return `ws://${host}:${port}${pathname}`
+        }
     }
 }
 
@@ -170,8 +175,13 @@ export class WssProtocol extends WsProtocolBase<https.Server, https.ServerOption
     override createConnection(orb: ORB, connection: WebSocketConnection): WsConnection {
         return new WssConnection(orb, connection)
     }
-    override getUrl(host: string, port: number) {
-        return `wss://${host}:${port}/`
+    override getUrl(host: string, port: number, pathname?: string) {
+        if(pathname === undefined) {
+            return `wss://${host}:${port}/`
+        }
+        else {
+            return `wss://${host}:${port}${pathname}`
+        }
     }
 }
 

@@ -21,7 +21,7 @@ import { Connection } from "./connection"
 import { GIOPDecoder, GIOPEncoder, MessageType, LocateStatusType, ReplyStatus, ObjectReference, EstablishContext, AuthenticationStatus, GSSUPInitialContextToken, RequestData } from "./giop"
 import { IOR } from "./ior"
 import { Uint8Map } from "./uint8map"
-import { CorbaName, UrlParser } from "./url"
+import { CorbaName, CorbaHTTP, UrlParser } from "./url"
 
 export class Exception extends Error {
 }
@@ -164,7 +164,7 @@ export class ORB implements EventTarget {
         // this.logConnection()
     }
 
-    async getConnection(host: string, port: number) {
+    async getConnection(host: string, port: number, pathname?: string) {
         // console.log(`ORB ${this.name}: getConnection("${host}", ${port})`)
         for (let i = 0; i < this.connections.length; ++i) {
             const c = this.connections[i]
@@ -175,8 +175,14 @@ export class ORB implements EventTarget {
         }
         for (let i = 0; i < this.protocols.length; ++i) {
             const p = this.protocols[i]
-            const c = await p.connect(this, host, port)
-            return c
+            if(pathname === undefined) {
+                const c = await p.connect(this, host, port)
+                return c
+            }
+            else {
+                const c = await p.connect(this, host, port, pathname)
+                return c
+            }
         }
         throw Error(`failed to allocate connection to ${host}:${port}`)
     }
@@ -224,6 +230,11 @@ export class ORB implements EventTarget {
                     throw Error("yikes")
             }
 
+        }
+        if (iorOrLocation instanceof CorbaHTTP) {
+            const connection = await this.getConnection(iorOrLocation.host, iorOrLocation.port, iorOrLocation.pathname);
+            const objectKey = new TextEncoder().encode(iorOrLocation.objectKey);
+            return new Stub(this, objectKey, connection);
         }
         throw Error("yikes")
     }
@@ -754,7 +765,7 @@ export abstract class Skeleton extends CORBAObject {
 
 // a stub relates to one connection
 // the id is defined by the peer, hence duplicate ids might refer to different objects
-export abstract class Stub extends CORBAObject {
+export class Stub extends CORBAObject {
     connection: Connection
     constructor(orb: ORB, remoteID: Uint8Array, connection: Connection) {
         super(orb, remoteID)
@@ -766,7 +777,7 @@ export abstract class Stub extends CORBAObject {
     }
 }
 
-class NamingContextExtStub extends Stub {
+export class NamingContextExtStub extends Stub {
     static _idlClassName(): string {
         return "omg.org/CosNaming/NamingContextExt"
     }
@@ -774,6 +785,8 @@ class NamingContextExtStub extends Stub {
     static narrow(object: any): NamingContextExtStub {
         if (object instanceof NamingContextExtStub)
             return object as NamingContextExtStub
+        else if (object instanceof Stub)
+            return new NamingContextExtStub(object.orb, object.id, object.connection)
         throw Error("NamingContextExt.narrow() failed")
     }
 

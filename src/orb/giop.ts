@@ -114,6 +114,7 @@ export enum TagType {
     RMI_CUSTOM_MAX_STREAM_FORMAT = 38,
     GROUP = 39,
     GROUP_IIOP = 40,
+    OMNIORB_HTTP_TRANS = 1096045573,
 }
 
 // Component
@@ -383,6 +384,8 @@ export class ObjectReference {
     oid!: string
     host!: string
     port!: number
+    protocol!: string
+    pathname!: string
     objectKey!: Uint8Array
     toString(): string {
         return `ObjectReference(oid=${this.oid}, host=${this.host}, port=${this.port}, objectKey=${this.objectKey}')`
@@ -1238,6 +1241,17 @@ export class GIOPDecoder extends GIOPBase {
                                 case TagType.POLICIES:
                                     // console.log(`IOR: component[${i}] = POLICIES`)
                                     break
+                                case TagType.OMNIORB_HTTP_TRANS:
+                                        const urlCount = this.ulong();
+                                        for (let j = 0; j < urlCount; ++j) {
+                                            const url = new URL(this.string());
+                                            data.host = url.hostname;
+                                            data.port = parseInt(url.port);
+                                            data.protocol = url.protocol;
+                                            data.pathname = url.pathname;
+                                            break;
+                                        }
+                                        break;
                                 default:
                                 // console.log(`IOR: component[${i}] = ${id} (0x${id.toString(16)})`)
                             }
