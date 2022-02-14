@@ -16,9 +16,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { CORBAObject, ORB, IOR, Stub, Skeleton, ValueTypeInformation } from "corba.js"
+import { CORBAObject, ORB, Stub, Skeleton, ValueTypeInformation } from "./orb"
+import { IOR } from "./ior"
 import { Connection } from "./connection"
 import { ASN1Tag, ASN1Encoding, ASN1Class, ASN1UniversalTag } from "./asn1"
+import { CompletionStatus, OBJECT_ADAPTER } from "./orb"
 
 // 9.4 GIOP Message Formats
 export enum MessageType {
@@ -666,17 +668,15 @@ export class GIOPEncoder extends GIOPBase {
         const position = this.repositoryIds.get(id)
         if (position === undefined) {
             // console.log(`GIOPDecoder.repositoryId(): at 0x${this.offset.toString(16)} writing repository ID '${id}' at 0x${this.offset.toString(16)}`)
-            this.repositoryIds.set(id, this.offset)
             this.ulong(0x7fffff02) // single repositoryId
-            // console.log(`=====> place string '${id}' at 0x${this.offset.toString(16)}`)
+            this.repositoryIds.set(id, this.offset)
             this.string(id)
         } else {
             // 9.3.4.3
-            const indirection = position - this.offset - 2
             // console.log(`GIOPDecoder.repositoryId(): at 0x${this.offset.toString(16)} writing indirect repository ID '${id}' indirection ${indirection} pointing to 0x${position.toString(16)}`)
             this.ulong(0x7fffff02) // single repositoryId
-            this.ulong(0xffffffff) // sure? how the heck to we distinguish indirections to object and repositoryId?
-            this.long(indirection - 2)
+            this.ulong(0xffffffff)
+            this.long(position - this.offset)
         }
     }
 
@@ -747,11 +747,9 @@ export class GIOPEncoder extends GIOPBase {
 
         const position = this.objectPosition.get(object)
         if (position !== undefined) {
-            let indirection = position - this.offset - 2
             // console.log(`GIOPEncoder.object(): at 0x${this.offset.toString(16)} write object indirection ${indirection} pointing to 0x${position.toString(16)}`)
             this.ulong(0xffffffff)
-            indirection -= 2
-            this.long(indirection)
+            this.long(position - this.offset)
             return
         }
 
@@ -769,6 +767,7 @@ export class GIOPEncoder extends GIOPBase {
             console.log(object)
             throw Error(`ORB: can not serialize object of unregistered valuetype ${object.constructor.name}`)
         }
+        this.align(4)
         this.objectPosition.set(object, this.offset)
         this.repositoryId(valueTypeInformation.name!)
         valueTypeInformation.encode(this, object)
@@ -785,9 +784,10 @@ export class GIOPEncoder extends GIOPBase {
     }
 
     string(value: string) {
-        this.ulong(value.length + 1)
-        this.bytes.set(GIOPEncoder.textEncoder.encode(value), this.offset)
-        this.offset += value.length
+        const octets = GIOPEncoder.textEncoder.encode(value)
+        this.ulong(octets.length + 1)
+        this.bytes.set(octets, this.offset)
+        this.offset += octets.length
         this.bytes[this.offset] = 0
         this.offset++
     }
@@ -807,8 +807,8 @@ export class GIOPEncoder extends GIOPBase {
         this.offset += 1
     }
 
-    char(value: number) {
-        this.data.setUint8(this.offset, value)
+    char(value: string) {
+        this.data.setUint8(this.offset, value.charCodeAt(0))
         this.offset += 1
     }
 
@@ -1319,13 +1319,16 @@ export class GIOPDecoder extends GIOPBase {
                 if (len !== 0xffffffff) {
                     repositoryId = this.string(len)
                 } else {
+                    const offset = this.offset
                     const indirection = this.long()
-                    const savedOffset = this.offset
-                    this.offset = this.offset + indirection - 4 - 6
-                    this.offset += 4 // skip marker
-                    this.offset += 2
+                    const nextOffset = this.offset
+                    this.offset = offset + indirection
+                    if ((this.offset & 0x03) !== 0) {
+                        console.error(`WRONG INDIRECTION: GOT 0x${this.offset.toString(16)}, EXPECTED 0x${(this.offset - (this.offset & 0x03)).toString(16)}`)
+                        this.offset = this.offset - (this.offset & 0x03)
+                    }
                     repositoryId = this.string()
-                    this.offset = savedOffset
+                    this.offset = nextOffset
                 }
                 if (repositoryId.length < 8 || repositoryId.substring(0, 4) !== "IDL:" || repositoryId.substring(repositoryId.length - 4) !== ":1.0")
                     throw Error(`Unsupported CORBA GIOP Repository ID '${repositoryId}'`)
@@ -1381,7 +1384,8 @@ export class GIOPDecoder extends GIOPBase {
             const shortName = reference.oid.substring(4, reference.oid.length - 4)
             let aStubClass = this.connection.orb.stubsByName.get(shortName)
             if (aStubClass === undefined) {
-                throw Error(`ORB: no stub registered for OID '${reference.oid} (${shortName})'`)
+                // throw Error(`ORB: no stub registered for OID '${reference.oid}' (${shortName})`)
+                throw new OBJECT_ADAPTER(0x4f4d0003, CompletionStatus.NO)
             }
             object = new aStubClass(this.connection.orb, reference.objectKey, this.connection)
             this.connection.stubsById.set(reference.objectKey, object!)
@@ -1429,7 +1433,7 @@ export class GIOPDecoder extends GIOPBase {
     }
 
     char() {
-        const value = this.data.getUint8(this.offset)
+        const value = String.fromCharCode(this.data.getUint8(this.offset))
         ++this.offset
         return value
     }

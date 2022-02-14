@@ -76,7 +76,7 @@ describe("CDR/GIOP", () => {
         // though conversion to another form may be required for transmission.
         it("char", async function () {
             fake.expect(this.test!.fullTitle())
-            await server.sendChar(0, 255)
+            await server.sendChar(String.fromCharCode(0), String.fromCharCode(255))
             expect(await server.peek()).to.equal("sendChar(0,255)")
         })
 
@@ -735,6 +735,31 @@ describe("CDR/GIOP", () => {
         })
     })
 
+    describe("persistence", function() {
+        it("serialize/deserialize", function() {
+            
+            const r = new Rectangle()
+            r.origin = new Point({x: 10, y: 20})
+            r.size = new Size({ width: 30, height: 40 })
+            const valueIn = new FigureModel()
+            valueIn.data.push(r)
+
+            const binary = orb.serialize(valueIn)
+            const valueOut = orb.deserialize(binary)
+
+            expect(valueIn).to.deep.equal(valueOut)
+        })
+    })
+
+    it("string() encoding/decoding", function() {
+        const textIn = "Von Äpfeln schön überfreßen."
+        const encoder = new GIOPEncoder()
+        encoder.string(textIn)
+        const decoder = new GIOPDecoder(encoder.buffer)
+        const textOut = decoder.string()
+        expect(textOut).equals(textIn)
+    })
+
     describe("ASN.1", function () {
         it("JacORB with CSIv2 GSSUP Username+Password Auth", function () {
             const data = parseHexDump(
@@ -785,8 +810,8 @@ class GIOPTest_impl extends skel.GIOPTest {
     override async sendBool(v0: boolean, v1: boolean) {
         this.msg = `sendBool(${v0},${v1})`
     }
-    override async sendChar(v0: number, v1: number) {
-        this.msg = `sendChar(${v0},${v1})`
+    override async sendChar(v0: string, v1: string) {
+        this.msg = `sendChar(${v0.charCodeAt(0)},${v1.charCodeAt(0)})`
     }
     override async sendOctet(v0: number, v1: number) {
         this.msg = `sendOctet(${v0},${v1})`
