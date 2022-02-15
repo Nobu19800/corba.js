@@ -1276,6 +1276,19 @@ export class GIOPDecoder extends GIOPBase {
     object(typeInfo: string | undefined = undefined, isValue: boolean = false): any {
         // const objectOffset = this.offset + 6
 
+        if(isValue && typeInfo !== undefined) {
+            let valueTypeConstructor: any
+            valueTypeConstructor = ORB.lookupValueType(typeInfo);
+
+            if (valueTypeConstructor === undefined) {
+                throw Error(`insufficient value type information`);
+            }
+
+            const obj = new (valueTypeConstructor)(this);
+            this.objects.set(this.offset + 2, obj);
+            return obj;
+        }
+
         const code = this.ulong()
         if (code === 0)
             return undefined
