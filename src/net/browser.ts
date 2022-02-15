@@ -22,9 +22,9 @@ import { Protocol } from "../orb/protocol"
 
 export class WsProtocol implements Protocol {
     // called by the ORB
-    async connect(orb: ORB, host: string, port: number) {
+    async connect(orb: ORB, host: string, port: number, pathname?: string) {
         return new Promise<Connection>((resolve, reject) => {
-            const socket = new WebSocket(`ws://${host}:${port}`)
+            const socket = new WebSocket(this.getUrl(host, port, pathname), ["giop.omniorb.net"])
             const connection = new WsConnection(orb, socket)
             orb.addConnection(connection)
             socket.onopen = () => {
@@ -49,6 +49,15 @@ export class WsProtocol implements Protocol {
         })
     }
     async close() { }
+
+    getUrl(host: string, port: number, pathname?: string): string {
+        if(pathname === undefined) {
+            return `ws://${host}:${port}/`
+        }
+        else {
+            return `ws://${host}:${port}${pathname}`
+        }
+    }
 }
 
 class WsConnection extends Connection {
