@@ -25,6 +25,7 @@ export class WsProtocol implements Protocol {
     async connect(orb: ORB, host: string, port: number, pathname?: string) {
         return new Promise<Connection>((resolve, reject) => {
             const socket = new WebSocket(this.getUrl(host, port, pathname), ["giop.omniorb.net"])
+            socket.binaryType = "arraybuffer"
             const connection = new WsConnection(orb, socket)
             orb.addConnection(connection)
             socket.onopen = () => {
@@ -36,11 +37,11 @@ export class WsProtocol implements Protocol {
                     }
                 }
                 socket.onerror = (event: Event) => {
-                    orb.socketError(connection, 
+                    orb.socketError(connection,
                         new Error(`WebSocket connection error with ${socket.url}`)
                     )
                 }
-                socket.onclose = (event: CloseEvent) => orb.socketClosed(connection)   
+                socket.onclose = (event: CloseEvent) => orb.socketClosed(connection)
                 resolve(connection)
             }
             socket.onerror = (event: Event) => {
@@ -51,7 +52,7 @@ export class WsProtocol implements Protocol {
     async close() { }
 
     getUrl(host: string, port: number, pathname?: string): string {
-        if(pathname === undefined) {
+        if (pathname === undefined) {
             return `ws://${host}:${port}/`
         }
         else {

@@ -19,6 +19,7 @@
  import { expect } from "chai"
 
 import { ORB, GIOPDecoder } from "corba.js"
+import * as _interface from "./generated/basics"
 import * as value from "./generated/basics_value"
 import * as skel from "./generated/basics_skel"
 import * as stub from "./generated/basics_stub"
@@ -93,6 +94,16 @@ describe("corba.js", function() {
         expect(rectangle.origin.toString()).to.equal("Origin({x:10,y:20})")
         expect(rectangle.size).to.be.an.instanceof(Size)
         expect(rectangle.size.toString()).to.equal("Size({width:30,height:40})")
+
+        expect(await serverStub.twistColor({r: 1, g: 2, b: 3, a: 4})).to.deep.equal({r: 4, g: 3, b: 2, a: 1})
+
+        const attributesIn: _interface.Attribute[] = [
+            {type: _interface.AttributeType.STROKE_RGBA, strokeRGBA: {r: 1, g: 2, b: 3, a: 4}},
+            {type: _interface.AttributeType.FILL_RGBA, fillRGBA: {r: 5, g: 6, b: 7, a: 8}},
+            {type: _interface.AttributeType.STROKE_WIDTH, strokeWidth: 2.71},
+        ]
+        await serverStub.setAttributes(attributesIn)
+        expect(attributesIn).to.deep.equal(serverImpl.attributes)
     })
 })
 
@@ -152,6 +163,7 @@ class Server_impl extends skel.Server {
     methodBWasCalled = false
 
     client?: stub.Client
+    attributes?: _interface.Attribute[]
 
     constructor(orb: ORB) {
         super(orb)
@@ -179,6 +191,15 @@ class Server_impl extends skel.Server {
     async answer(a: number, b: number) {
         console.log("Server_impl.answer()")
         return a*b
+    }
+
+    async twistColor(color: _interface.RGBA) {
+        console.log(`Server_impl.setColor(${color.r},${color.g},${color.b},${color.a})`)
+        return {r: color.a, g: color.b, b: color.g, a: color.r}
+    }
+
+    async setAttributes(attributes: _interface.Attribute[]) {
+        this.attributes = attributes
     }
 }
 

@@ -69,6 +69,7 @@ export function typeIDLtoTS(type: Node | undefined, filetype: FileType = FileTyp
                     break
                 case Type.SYN_INTERFACE:
                 case Type.TKN_ENUM:
+                case Type.TKN_UNION:
                     if (filetype !== FileType.INTERFACE)
                         name = `_interface${absolutePrefix}.${relativeName}`
                     else
@@ -117,7 +118,7 @@ export function typeIDLtoTS(type: Node | undefined, filetype: FileType = FileTyp
     }
 }
 
-export function typeIDLtoGIOP(type: Node | undefined, arg: string | undefined = undefined): string {
+export function typeIDLtoGIOP(type: Node | undefined, arg: string | undefined = undefined, filetype = FileType.NONE): string {
     if (type === undefined)
         throw Error("internal error: parser delivered no type information")
     // console.log(`typeIDLtoGIOP(${type.toString()}, ${arg})`)
@@ -125,22 +126,31 @@ export function typeIDLtoGIOP(type: Node | undefined, arg: string | undefined = 
     switch (type!.type) {
         case Type.TKN_SEQUENCE:
             return arg === undefined ?
-                `decoder.sequence(() => ${typeIDLtoGIOP(type.child[0])})` :
-                `encoder.sequence(${arg}, (item) => ${typeIDLtoGIOP(type.child[0], "item")})`
+                `decoder.sequence(() => ${typeIDLtoGIOP(type.child[0], undefined, filetype)})` :
+                `encoder.sequence(${arg}, (item) => ${typeIDLtoGIOP(type.child[0], "item", filetype)})`
         case Type.TKN_IDENTIFIER:
         case Type.TKN_MODULE:
-            return typeIDLtoGIOP(type.child[0], arg)
+            return typeIDLtoGIOP(type.child[0], arg, filetype)
         case Type.TKN_VALUETYPE:
             return arg === undefined ? `decoder.value("${type.text}")` : `encoder.value(${arg})`
         case Type.SYN_INTERFACE:
-        case Type.TKN_STRUCT:
             name = "object"
             break
+
+        case Type.TKN_UNION:
+        case Type.TKN_STRUCT: {
+            const prefix = filetype === FileType.INTERFACE ? "" : "_interface."
+            return arg === undefined ?
+                `${prefix}decode${type!.text!}(decoder)` :
+                `${prefix}encode${type!.text!}(encoder,${arg})`
+        }
 
         case Type.TKN_NATIVE: {
             const id = type!.child[0]!.text!
             if (id.length > 4 && id.substring(id.length - 4) === "_ptr") {
-                return arg === undefined ? `decoder.value("${id.substring(0, id.length-4)}")` : `encoder.value(${arg})`
+                return arg === undefined ? 
+                    `decoder.value("${id.substring(0, id.length-4)}")` : 
+                    `encoder.value(${arg})`
             } else {
                 return `undefined`
             }

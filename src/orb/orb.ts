@@ -280,7 +280,7 @@ export class ORB implements EventTarget {
     }
 
     async getConnection(host: string, port: number, pathname?: string) {
-        if (host = "::1") {
+        if (host === "::1") {
             host = "localhost"
         }
         for (const c of this.connections) {
@@ -828,7 +828,7 @@ export class ORB implements EventTarget {
 
     //
     // Access Control List
-    ///
+    //
 
     release() {
         this.aclDeleteAll()
